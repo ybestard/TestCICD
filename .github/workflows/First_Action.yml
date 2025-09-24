@@ -30,6 +30,7 @@ jobs:
       - name: 🧪 Run PlayMode Tests
         uses: game-ci/unity-test-runner@v4
         env:
+          # Para licencia Personal - usar archivo .ulf
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
