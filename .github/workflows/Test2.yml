@@ -1,0 +1,46 @@
+name: Unity Minimal Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    
+    container:
+      image: unityci/editor:2022.3.17f1-base-3.0.0
+      options: --memory=4g --cpus=2
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Setup Unity License
+        run: |
+          mkdir -p /root/.cache/unity3d
+          echo '${{ secrets.UNITY_LICENSE }}' > /root/.cache/unity3d/Unity_lic.ulf
+          
+      - name: Run Tests
+        run: |
+          unity-editor \
+            -batchmode \
+            -quit \
+            -logFile /dev/stdout \
+            -runTests \
+            -testPlatform PlayMode \
+            -testResults test-results.xml \
+            -projectPath . \
+            || true
+            
+      - name: Show Results
+        run: |
+          if [ -f "test-results.xml" ]; then
+            echo "✅ Test file created"
+            cat test-results.xml
+          else
+            echo "❌ No test results found"
+            ls -la
+          fi
