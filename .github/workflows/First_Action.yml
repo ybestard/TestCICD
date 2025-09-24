@@ -100,7 +100,7 @@ jobs:
       
       # 5. Subir resultados de tests como artefactos
       - name: 📄 Upload Test Results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()  # Subir aunque fallen los tests
         with:
           name: Test-Results-${{ matrix.test-mode }}-${{ github.run_number }}
@@ -109,7 +109,7 @@ jobs:
       
       # 6. Subir reportes de cobertura
       - name: 📊 Upload Coverage Reports
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: Coverage-Report-${{ matrix.test-mode }}-${{ github.run_number }}
@@ -145,9 +145,11 @@ jobs:
     
     steps:
       - name: 📥 Download All Test Results
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: all-test-results
+          pattern: "*-Results-*"
+          merge-multiple: true
       
       - name: 📋 Generate Summary Report
         run: |
