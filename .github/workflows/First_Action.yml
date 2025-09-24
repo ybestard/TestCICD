@@ -12,6 +12,7 @@ on:
 # Variables
 env:
   UNITY_VERSION: 6000.2.1f1
+  # Si da problemas de licencia, prueba con: 2022.3.17f1
 
 jobs:
   test-playmode:
@@ -38,15 +39,18 @@ jobs:
           unityVersion: ${{ env.UNITY_VERSION }}
           testMode: playmode
           artifactsPath: test-results
+          projectPath: .
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
       
       # 3. Subir resultados (solo si quieres verlos)
       - name: 📄 Upload Results
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: PlayMode-Results
+          name: PlayMode-Results-${{ github.run_number }}
           path: test-results
           if-no-files-found: warn
+          retention-days: 7
       
       # 4. Mostrar resumen simple
       - name: ✅ Test Summary
@@ -55,9 +59,16 @@ jobs:
           echo "## 🎯 PlayMode Tests Completed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Tests de tu clase TestingPlayMode:" >> $GITHUB_STEP_SUMMARY
-          echo "- TestPlayerHealthSystemPlayMode" >> $GITHUB_STEP_SUMMARY
-          echo "- TestPlayerDeathPlayMode" >> $GITHUB_STEP_SUMMARY
-          echo "- NewTestScriptSimplePasses" >> $GITHUB_STEP_SUMMARY
-          echo "- NewTestScriptSyncPasses" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ TestPlayerHealthSystemPlayMode" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ TestPlayerDeathPlayMode" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ NewTestScriptSimplePasses" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ NewTestScriptSyncPasses" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "🎮 **Sistema PlayerHealth validado en PlayMode!**" >> $GITHUB_STEP_SUMMARY
+          echo "### 🎮 Sistema PlayerHealth - Funciones Validadas:" >> $GITHUB_STEP_SUMMARY
+          echo "- 🏥 **Inicialización:** Vida y armadura máxima" >> $GITHUB_STEP_SUMMARY
+          echo "- ⚔️ **Daño:** Se aplica primero a armadura, luego vida" >> $GITHUB_STEP_SUMMARY
+          echo "- 💊 **Curación:** Incrementa vida respetando límites" >> $GITHUB_STEP_SUMMARY
+          echo "- 💀 **Muerte:** Detecta correctamente cuando vida = 0" >> $GITHUB_STEP_SUMMARY
+          echo "- ❤️ **Estado:** Diferencia entre vivo/muerto" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🏆 **¡Sistema PlayerHealth funcionando correctamente!**" >> $GITHUB_STEP_SUMMARY
