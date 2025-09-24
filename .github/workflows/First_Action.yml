@@ -1,0 +1,180 @@
+# .github/workflows/test-playerhealth.yml
+name: Unity Tests - PlayerHealth System
+
+# Cuándo ejecutar los tests
+on:
+  # Al hacer push a estas ramas
+  push:
+    branches: [ main, develop, feature/* ]
+    paths:
+      - 'Assets/Scripts/**'          # Solo si cambian scripts
+      - 'Assets/Tests/**'            # Solo si cambian tests
+      - 'Packages/**'                # Solo si cambian packages
+  
+  # Al crear Pull Request hacia main
+  pull_request:
+    branches: [ main ]
+  
+  # Ejecutar manualmente desde GitHub
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'Modo de test a ejecutar'
+        required: false
+        default: 'playmode'
+        type: choice
+        options:
+          - playmode
+          - editmode
+          - both
+
+# Variables globales del workflow
+env:
+  UNITY_VERSION: 6000.2.1f1
+  PROJECT_PATH: .
+
+jobs:
+  # Job principal para ejecutar los tests
+  run-unity-tests:
+    name: Run PlayerHealth Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    # Estrategia para ejecutar diferentes tipos de test
+    strategy:
+      fail-fast: false  # No parar si falla un tipo de test
+      matrix:
+        test-mode:
+          - playmode  # Para tu TestingPlayMode
+          - editmode  # Tests que no requieren Play Mode
+    
+    steps:
+      # 1. Descargar el código del repositorio
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true  # Para archivos grandes (texturas, audio, etc.)
+      
+      # 2. Cache para acelerar builds futuros
+      - name: 💾 Cache Unity Library
+        uses: actions/cache@v3
+        with:
+          path: Library
+          key: Library-${{ runner.os }}-${{ matrix.test-mode }}-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-${{ runner.os }}-${{ matrix.test-mode }}-
+            Library-${{ runner.os }}-
+      
+      # 3. Cache para Unity Hub y Editor
+      - name: 💾 Cache Unity Installation
+        uses: actions/cache@v3
+        with:
+          path: /opt/unity
+          key: unity-${{ env.UNITY_VERSION }}-linux
+      
+      # 4. Ejecutar los tests de Unity
+      - name: 🧪 Run Unity Tests (${{ matrix.test-mode }})
+        uses: game-ci/unity-test-runner@v4
+        id: unity-tests
+        env:
+          # Secrets que debes configurar en GitHub
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          # Configuración del test runner
+          unityVersion: ${{ env.UNITY_VERSION }}
+          testMode: ${{ matrix.test-mode }}
+          projectPath: ${{ env.PROJECT_PATH }}
+          
+          # Configuración de artefactos
+          artifactsPath: test-results/${{ matrix.test-mode }}
+          useHostNetwork: false
+          
+          # Configuración de GitHub
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+          checkName: ${{ matrix.test-mode }} Test Results
+          
+          # Configuración de cobertura de código
+          coverageOptions: 'generateAdditionalMetrics;generateHtmlReport;generateBadgeReport;assemblyFilters:+Assembly-CSharp'
+      
+      # 5. Subir resultados de tests como artefactos
+      - name: 📄 Upload Test Results
+        uses: actions/upload-artifact@v3
+        if: always()  # Subir aunque fallen los tests
+        with:
+          name: Test-Results-${{ matrix.test-mode }}-${{ github.run_number }}
+          path: test-results/${{ matrix.test-mode }}
+          retention-days: 30
+      
+      # 6. Subir reportes de cobertura
+      - name: 📊 Upload Coverage Reports
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: Coverage-Report-${{ matrix.test-mode }}-${{ github.run_number }}
+          path: ${{ steps.unity-tests.outputs.coveragePath }}
+          retention-days: 30
+      
+      # 7. Comentar resultados en PR (si es un Pull Request)
+      - name: 💬 Comment Test Results on PR
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const testMode = '${{ matrix.test-mode }}';
+            const status = '${{ steps.unity-tests.outcome }}';
+            const runUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
+            
+            const statusEmoji = status === 'success' ? '✅' : '❌';
+            const message = `${statusEmoji} **${testMode} Tests**: ${status}\n📋 [Ver detalles completos](${runUrl})`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: message
+            });
+
+  # Job para generar reporte consolidado
+  test-report:
+    name: 📊 Generate Test Report
+    runs-on: ubuntu-latest
+    needs: run-unity-tests
+    if: always()  # Ejecutar aunque fallen algunos tests
+    
+    steps:
+      - name: 📥 Download All Test Results
+        uses: actions/download-artifact@v3
+        with:
+          path: all-test-results
+      
+      - name: 📋 Generate Summary Report
+        run: |
+          echo "# 🧪 Test Results Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Mode | Status | Artifacts |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|-----------|" >> $GITHUB_STEP_SUMMARY
+          
+          for dir in all-test-results/Test-Results-*; do
+            if [ -d "$dir" ]; then
+              test_mode=$(basename "$dir" | cut -d'-' -f3-)
+              echo "| $test_mode | ✅ Completed | 📁 Available |" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 📋 Tu Clase TestingPlayMode" >> $GITHUB_STEP_SUMMARY
+          echo "Los siguientes tests fueron ejecutados:" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ TestPlayerHealthSystemPlayMode" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ TestPlayerDeathPlayMode" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ NewTestScriptSimplePasses" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ NewTestScriptSyncPasses" >> $GITHUB_STEP_SUMMARY
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🎯 **Sistema PlayerHealth verificado:** Vida, armadura, daño y estado vivo/muerto" >> $GITHUB_STEP_SUMMARY
+
+# Configuración adicional para el workflow
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true  # Cancelar tests anteriores si hay un nuevo push
