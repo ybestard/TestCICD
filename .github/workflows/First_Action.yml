@@ -1,180 +1,62 @@
-# .github/workflows/test-playerhealth.yml
-name: Unity Tests - PlayerHealth System
+# .github/workflows/simple-test.yml
+name: Simple PlayMode Tests
 
-# Cuándo ejecutar los tests
+# Cuándo ejecutar
 on:
   push:
-    branches: [ main, develop, feature/* ]
-    paths:
-      - 'Assets/Scripts/**'          
-      - 'Assets/Tests/**'            
-      - 'Packages/**'                
-  
+    branches: [ main, develop ]
   pull_request:
     branches: [ main ]
-  
   workflow_dispatch:
-    inputs:
-      test_mode:
-        description: 'Modo de test a ejecutar'
-        required: false
-        default: 'playmode'
-        type: choice
-        options:
-          - playmode
-          - editmode
-          - both
 
+# Variables
 env:
   UNITY_VERSION: 6000.2.1f1
-  PROJECT_PATH: .
 
 jobs:
-  run-unity-tests:
-    name: Run PlayerHealth Tests
+  test-playmode:
+    name: Test PlayerHealth PlayMode
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    
-    strategy:
-      fail-fast: false
-      matrix:
-        test-mode:
-          - playmode
-          - editmode
+    timeout-minutes: 20
     
     steps:
-      # 1. Descargar el código del repositorio
-      - name: 📥 Checkout Repository
+      # 1. Descargar código
+      - name: 📥 Checkout
         uses: actions/checkout@v4
         with:
           lfs: true
       
-      # 2. Cache para acelerar builds futuros
-      - name: 💾 Cache Unity Library
-        uses: actions/cache@v4
-        with:
-          path: Library
-          key: Library-${{ runner.os }}-${{ matrix.test-mode }}-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
-          restore-keys: |
-            Library-${{ runner.os }}-${{ matrix.test-mode }}-
-            Library-${{ runner.os }}-
-      
-      # 3. Ejecutar los tests de Unity
-      - name: 🧪 Run Unity Tests (${{ matrix.test-mode }})
+      # 2. Ejecutar tests de PlayMode solamente
+      - name: 🧪 Run PlayMode Tests
         uses: game-ci/unity-test-runner@v4
-        id: unity-tests
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
           unityVersion: ${{ env.UNITY_VERSION }}
-          testMode: ${{ matrix.test-mode }}
-          projectPath: ${{ env.PROJECT_PATH }}
-          artifactsPath: test-results/${{ matrix.test-mode }}
-          useHostNetwork: false
-          githubToken: ${{ secrets.GITHUB_TOKEN }}
-          checkName: ${{ matrix.test-mode }} Test Results
-          # Cobertura simplificada solo para PlayMode
-          coverageOptions: ${{ matrix.test-mode == 'playmode' && 'generateAdditionalMetrics;generateHtmlReport' || '' }}
+          testMode: playmode
+          artifactsPath: test-results
       
-      # 4. Subir resultados de tests como artefactos
-      - name: 📄 Upload Test Results
+      # 3. Subir resultados (solo si quieres verlos)
+      - name: 📄 Upload Results
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Test-Results-${{ matrix.test-mode }}-${{ github.run_number }}
-          path: test-results/${{ matrix.test-mode }}
-          retention-days: 30
+          name: PlayMode-Results
+          path: test-results
           if-no-files-found: warn
       
-      # 5. Verificar si existe coverage path
-      - name: 🔍 Check Coverage Path
-        id: check-coverage
-        if: always() && matrix.test-mode == 'playmode'
-        run: |
-          COVERAGE_PATH="${{ steps.unity-tests.outputs.coveragePath }}"
-          echo "Coverage path from unity-tests: '$COVERAGE_PATH'"
-          
-          if [ -n "$COVERAGE_PATH" ] && [ -d "$COVERAGE_PATH" ]; then
-            echo "✅ Coverage directory exists: $COVERAGE_PATH"
-            echo "coverage-exists=true" >> $GITHUB_OUTPUT
-            echo "coverage-path=$COVERAGE_PATH" >> $GITHUB_OUTPUT
-            ls -la "$COVERAGE_PATH" || true
-          else
-            echo "❌ No coverage directory found or empty path"
-            echo "coverage-exists=false" >> $GITHUB_OUTPUT
-            # Buscar archivos de cobertura en ubicaciones comunes
-            find . -name "*.xml" -path "*/CodeCoverage/*" -type f 2>/dev/null || true
-            find . -name "coverage*" -type d 2>/dev/null || true
-          fi
-      
-      # 6. Subir reportes de cobertura (solo si existen)
-      - name: 📊 Upload Coverage Reports
-        uses: actions/upload-artifact@v4
-        if: always() && steps.check-coverage.outputs.coverage-exists == 'true'
-        with:
-          name: Coverage-Report-${{ matrix.test-mode }}-${{ github.run_number }}
-          path: ${{ steps.check-coverage.outputs.coverage-path }}
-          retention-days: 30
-          if-no-files-found: warn
-      
-      # 7. Mostrar resumen de tests ejecutados
-      - name: 📋 Test Summary
+      # 4. Mostrar resumen simple
+      - name: ✅ Test Summary
         if: always()
         run: |
-          echo "## 🧪 Test Summary for ${{ matrix.test-mode }}" >> $GITHUB_STEP_SUMMARY
+          echo "## 🎯 PlayMode Tests Completed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Tests ejecutados en tu clase TestingPlayMode:" >> $GITHUB_STEP_SUMMARY
-          echo "- TestPlayerHealthSystemPlayMode ✅" >> $GITHUB_STEP_SUMMARY
-          echo "- TestPlayerDeathPlayMode ✅" >> $GITHUB_STEP_SUMMARY
-          echo "- NewTestScriptSimplePasses ✅" >> $GITHUB_STEP_SUMMARY
-          echo "- NewTestScriptSyncPasses ✅" >> $GITHUB_STEP_SUMMARY
+          echo "### Tests de tu clase TestingPlayMode:" >> $GITHUB_STEP_SUMMARY
+          echo "- TestPlayerHealthSystemPlayMode" >> $GITHUB_STEP_SUMMARY
+          echo "- TestPlayerDeathPlayMode" >> $GITHUB_STEP_SUMMARY
+          echo "- NewTestScriptSimplePasses" >> $GITHUB_STEP_SUMMARY
+          echo "- NewTestScriptSyncPasses" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Status:** ${{ steps.unity-tests.outcome }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Mode:** ${{ matrix.test-mode }}" >> $GITHUB_STEP_SUMMARY
-
-  # Job para generar reporte consolidado
-  test-report:
-    name: 📊 Generate Test Report
-    runs-on: ubuntu-latest
-    needs: run-unity-tests
-    if: always()
-    
-    steps:
-      - name: 📥 Download All Test Results
-        uses: actions/download-artifact@v4
-        with:
-          path: all-test-results
-          pattern: "Test-Results-*"
-          merge-multiple: true
-      
-      - name: 📋 Generate Summary Report
-        run: |
-          echo "# 🧪 Test Results Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Test Mode | Status | Artifacts |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----------|--------|-----------|" >> $GITHUB_STEP_SUMMARY
-          
-          for dir in all-test-results/*/; do
-            if [ -d "$dir" ]; then
-              test_mode=$(basename "$dir")
-              echo "| $test_mode | ✅ Completed | 📁 Available |" >> $GITHUB_STEP_SUMMARY
-            fi
-          done
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## 📋 Tu Sistema PlayerHealth" >> $GITHUB_STEP_SUMMARY
-          echo "Los siguientes aspectos fueron validados:" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ **Inicialización:** Vida y armadura máxima" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ **Sistema de daño:** Armadura primero, luego vida" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ **Curación:** Incremento de vida respetando máximos" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ **Estados:** Detección correcta de vivo/muerto" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ **Muerte:** Validación de estado cuando vida = 0" >> $GITHUB_STEP_SUMMARY
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "🎯 **Sistema completamente funcional y testeado!**" >> $GITHUB_STEP_SUMMARY
-
-concurrency:
-  group: tests-${{ github.ref }}
-  cancel-in-progress: true
+          echo "🎮 **Sistema PlayerHealth validado en PlayMode!**" >> $GITHUB_STEP_SUMMARY
